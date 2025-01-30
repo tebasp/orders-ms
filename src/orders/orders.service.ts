@@ -12,6 +12,7 @@ import { OrderPaginationDto } from './dto/order-pagination.dto';
 import { OrderStatusDto } from './dto/order-status.dto';
 import { NATS_SERVICE } from '../config/service-tokens';
 import { firstValueFrom } from 'rxjs';
+import { OrderWithProductDto } from './dto/order-with-product.dto';
 
 @Injectable()
 export class OrdersService extends PrismaClient implements OnModuleInit {
@@ -53,8 +54,9 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
           OrderItem: {
             createMany: {
               data: createOrderDto?.items?.map((item) => ({
-                price: products?.find((p) => p?.id === item?.id)?.price,
+                name: products?.find((p) => p?.id === item?.id)?.name,
                 productId: item?.id,
+                price: products?.find((p) => p?.id === item?.id)?.price,
                 quantity: item?.quantity,
               })),
             },
@@ -63,6 +65,7 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
         include: {
           OrderItem: {
             select: {
+              name: true,
               productId: true,
               quantity: true,
               price: true,
@@ -171,5 +174,30 @@ export class OrdersService extends PrismaClient implements OnModuleInit {
       where: { id },
       data: { status },
     });
+  }
+
+  async createPaymentSession(order: OrderWithProductDto) {
+    try {
+      const paymentSession = await firstValueFrom(
+        this._natsService.send('create.payment.session', {
+          orderId: order.id,
+          currency: 'usd',
+          items: order.OrderItem.map((item) => ({
+            name: item?.name,
+            price: item?.price,
+            quantity: item?.quantity,
+          })),
+        }),
+      );
+
+      return paymentSession;
+    } catch (e) {
+      console.log('Error', e);
+
+      throw new RpcException({
+        message: `Could not create the payment session ${e?.message}`,
+        status: HttpStatus.BAD_REQUEST,
+      });
+    }
   }
 }

@@ -4,14 +4,24 @@ import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderPaginationDto } from './dto/order-pagination.dto';
 import { OrderStatusDto } from './dto/order-status.dto';
+import { OrderWithProductDto } from './dto/order-with-product.dto';
 
 @Controller()
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @MessagePattern('createOrder')
-  create(@Payload() createOrderDto: CreateOrderDto) {
-    return this.ordersService.create(createOrderDto);
+  async create(@Payload() createOrderDto: CreateOrderDto) {
+    const order = await this.ordersService.create(createOrderDto);
+
+    const paymentSession = await this.ordersService.createPaymentSession(
+      order as OrderWithProductDto,
+    );
+
+    return {
+      order,
+      paymentSession,
+    };
   }
 
   @MessagePattern('findAllOrders')
